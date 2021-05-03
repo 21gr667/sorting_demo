@@ -15,6 +15,7 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   rospy
   std_msgs
+  geometry_msgs
   moveit_ros_planning_interface
   moveit_visual_tools
   message_generation
@@ -58,11 +59,10 @@ find_package(catkin REQUIRED COMPONENTS
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
-#   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+add_message_files(
+  FILES
+  object.msg
+)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -79,11 +79,12 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
-#generate_messages(
-#   DEPENDENCIES
-#   std_msgs
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
 #   actionlib_msgs
-# )
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -117,7 +118,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES sorting_demo
-#  CATKIN_DEPENDS roscpp rospy std_msgs
+CATKIN_DEPENDS message_runtime roscpp rospy std_msgs geometry_msgs
 #  DEPENDS system_lib
 #   CATKIN_DEPENDS actionlib_msgs
 )
@@ -221,3 +222,7 @@ include_directories(
 add_executable(camera_node src/camera_node.cpp)
 #add_dependencies(camera_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
 target_link_libraries(camera_node ${catkin_LIBRARIES} -lrealsense2 -lzbar)
+
+add_executable(picking_node src/picking_node.cpp)
+#add_dependencies(picking_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
+target_link_libraries(picking_node ${catkin_LIBRARIES})
