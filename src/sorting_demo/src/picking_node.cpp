@@ -1,25 +1,266 @@
 #include <ros/ros.h>
 #include "sorting_demo/object.h"
 #include <iostream>
+#include <queue>
+#include <math.h>
+
+// Moveit headers
+#include <moveit/move_group_interface/move_group_interface.h>
+#include <moveit/robot_model_loader/robot_model_loader.h>
+
+// C library headers
+#include <stdio.h>
+#include <string.h>
+
+// Linux headers
+#include <fcntl.h> // Contains file controls like O_RDWR
+#include <errno.h> // Error integer and strerror() function
+#include <termios.h> // Contains POSIX terminal control definitions
+#include <unistd.h> // write(), read(), close()
+
+using namespace std;
+
+const std::string PLANNING_GROUP = "manipulator";
+int serial_port = 0;
+bool isDonePicking = true;
+double conveyorSpeed = 1000/25.15;
+
+class Object {
+    public:
+        double x;
+        double y;
+        double z;
+        ros::Time stamp;
+        std::string type;
+};
+
+queue<Object> objects;
 
 void objectCallback(const sorting_demo::object::ConstPtr& msg) {
-    ROS_INFO("I heard x: [%f]", msg->point.x);
-    ROS_INFO("I heard y: [%f]", msg->point.y);
-    ROS_INFO("I heard z: [%f]", msg->point.z);
-    ROS_INFO("I heard time: [%d]", msg->stamp.toSec());
-    ROS_INFO("I heard: [%s]", msg->type.c_str());
+    Object newObject;
+    newObject.x = msg->point.x;
+    newObject.y = msg->point.y;
+    newObject.z = msg->point.z;
+    newObject.stamp = msg->stamp;
+    newObject.type = msg->type.c_str();
+    objects.push(newObject);
+}
+
+void set_gripper_state(bool open) {
+    if (open) {
+        write(serial_port, "1", 2);
+        ROS_INFO("Gripper opened\n");
+    } else {
+        write(serial_port, "0", 2);
+        ROS_INFO("Gripper closed\n");
+    }
+}
+
+void go_to_position(std::vector<double> goal) {
+
+    
+    ROS_INFO("aaaa");
+
+    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
+
+    geometry_msgs::Pose target_pose1;
+    target_pose1.orientation.w = 1.0;
+    target_pose1.position.x = -0.28;
+    target_pose1.position.y = -0.01;
+    target_pose1.position.z = 0.5;
+    move_group.setPoseTarget(target_pose1);
+    ROS_INFO("bbbb");
+    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+    ROS_INFO("cccc");
+    move_group.plan(my_plan);
+    ROS_INFO("dddd");
+    move_group.move();
+    ROS_INFO("eeee");
+    
+
+
+/*
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    move_group->setMaxAccelerationScalingFactor(1.0);
+    move_group->setPositionTarget(goal[0], goal[1], goal[2]);
+    ROS_INFO("bbbb");
+    move_group->setRPYTarget(goal[3], goal[4], goal[5]);
+    ROS_INFO("cccc");
+    move_group->setNumPlanningAttempts(10);
+    ROS_INFO("dddd");
+    move_group->plan(plan);
+    ROS_INFO("eeee");
+    move_group->execute(plan);
+    ROS_INFO("ffff");
+    */
+}
+
+std::vector<double> computePickPosition(Object object) {
+    double x = 0.08 + object.y;
+    double y = 0.0;
+    double z = - 0.395 + object.z + 0.1;
+    return {x, y, z};
+}
+
+void goToPickPosition(std::vector<double> position) {
+    position.push_back(1.38);
+    position.push_back(-2.82);
+    position.push_back(0.0);
+    go_to_position(position);
+}
+
+void waitForObject(Object object) {
+    double travelTime = conveyorSpeed/(760 - object.x);
+
+    ros::Duration timeSpend = ros::Time::now() - object.stamp;
+    ros::Duration timeLeft = ros::Duration(travelTime) - timeSpend;
+    timeLeft.sleep();
+}
+
+void pick(std::vector<double> position) {
+    std::vector<double> downPick = position;
+    downPick.push_back(1.38);
+    downPick.push_back(-2.82);
+    downPick.push_back(0.0);
+    downPick[2] = downPick[2] - 0.02;
+    std::vector<double> upPick = position;
+
+    go_to_position(downPick);
+    go_to_position(upPick);
+}
+
+void goToBucket(string objectType) {
+
+}
+
+void goToDefaultPosition() {
+
+}
+
+void tryPickNext() {
+    if (isDonePicking && !objects.empty()) {
+        isDonePicking = false;
+        Object pickObject = objects.front();
+        objects.pop();
+
+        ROS_INFO("X: %f", pickObject.x);
+        ROS_INFO("found: %f", pickObject.y);
+        ROS_INFO("found: %f", pickObject.z);
+        ROS_INFO("found: %f", pickObject.stamp.toSec());
+        ROS_INFO("found: %s", pickObject.type.c_str());
+
+        ROS_INFO("1111");
+        std::vector<double> pickPosition = computePickPosition(pickObject);
+        ROS_INFO("2222");
+        goToPickPosition(pickPosition);
+        ROS_INFO("3333");
+        set_gripper_state(true);
+        ROS_INFO("4444");
+        waitForObject(pickObject);
+        ROS_INFO("5555");
+        pick(pickPosition);
+        ROS_INFO("6666");
+        goToBucket(pickObject.type.c_str());
+        ROS_INFO("7777");
+        set_gripper_state(false);
+        ROS_INFO("8888");
+        goToDefaultPosition();
+        ROS_INFO("9999");
+
+        isDonePicking = true;
+    }
+}
+
+void configure_serial_port() {
+    serial_port = open("/dev/ttyACM0", O_RDWR);
+
+    struct termios tty;
+
+    // Read in existing settings, and handle any error
+    if(tcgetattr(serial_port, &tty) != 0) {
+        printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
+    }
+
+    tty.c_cflag &= ~PARENB; // Clear parity bit, disabling parity (most common)
+    tty.c_cflag &= ~CSTOPB; // Clear stop field, only one stop bit used in communication (most common)
+    tty.c_cflag &= ~CSIZE; // Clear all bits that set the data size 
+    tty.c_cflag |= CS8; // 8 bits per byte (most common)
+    tty.c_cflag &= ~CRTSCTS; // Disable RTS/CTS hardware flow control (most common)
+    tty.c_cflag |= CREAD | CLOCAL; // Turn on READ & ignore ctrl lines (CLOCAL = 1)
+
+    tty.c_lflag &= ~ICANON;
+    tty.c_lflag &= ~ECHO; // Disable echo
+    tty.c_lflag &= ~ECHOE; // Disable erasure
+    tty.c_lflag &= ~ECHONL; // Disable new-line echo
+    tty.c_lflag &= ~ISIG; // Disable interpretation of INTR, QUIT and SUSP
+    tty.c_iflag &= ~(IXON | IXOFF | IXANY); // Turn off s/w flow ctrl
+    tty.c_iflag &= ~(IGNBRK|BRKINT|PARMRK|ISTRIP|INLCR|IGNCR|ICRNL); // Disable any special handling of received bytes
+
+    tty.c_oflag &= ~OPOST; // Prevent special interpretation of output bytes (e.g. newline chars)
+    tty.c_oflag &= ~ONLCR; // Prevent conversion of newline to carriage return/line feed
+    // tty.c_oflag &= ~OXTABS; // Prevent conversion of tabs to spaces (NOT PRESENT ON LINUX)
+    // tty.c_oflag &= ~ONOEOT; // Prevent removal of C-d chars (0x004) in output (NOT PRESENT ON LINUX)
+
+    tty.c_cc[VTIME] = 10;    // Wait for up to 1s (10 deciseconds), returning as soon as any data is received.
+    tty.c_cc[VMIN] = 0;
+
+    // Set in/out baud rate to be 115200
+    cfsetispeed(&tty, B115200);
+    cfsetospeed(&tty, B115200);
+
+    // Save tty settings, also checking for error
+    if (tcsetattr(serial_port, TCSANOW, &tty) != 0) {
+        printf("Error %i from tcsetattr: %s\n", errno, strerror(errno));
+    }
+
+    ros::Duration(3.0).sleep();
 }
 
 int main(int argc, char **argv) {
     ros::init(argc, argv, "picking_node");
-
+    ros::AsyncSpinner spinner(4);
     ros::NodeHandle nodeHandle;
 
     ros::Subscriber subscriber = nodeHandle.subscribe("objects", 1000, objectCallback);
 
-    ROS_INFO("Hello World!");
+    spinner.start();
 
-    ros::spin();
+    configure_serial_port();
+
+
+    ros::Rate loop_rate(10);
+    while (ros::ok()) {
+        //ros::spinOnce();
+        tryPickNext();
+        ROS_INFO("wuhu");
+        loop_rate.sleep();
+    }
+    
+    /*
+    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
+
+    geometry_msgs::Pose target_pose1;
+    target_pose1.orientation.w = 1.0;
+    target_pose1.position.x = 0.28;
+    target_pose1.position.y = -0.2;
+    target_pose1.position.z = 0.5;
+    move_group.setPoseTarget(target_pose1);
+    ROS_INFO("bbbb");
+    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+    ROS_INFO("cccc");
+    move_group.plan(my_plan);
+    ROS_INFO("dddd");
+    move_group.move();
+    ROS_INFO("eeee");
+    */
+
+
+
+
+
+    ros::waitForShutdown();
+
+    close(serial_port);
 
     return 0;
 }
