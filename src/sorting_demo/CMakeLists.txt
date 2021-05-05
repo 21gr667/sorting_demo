@@ -22,7 +22,6 @@ find_package(catkin REQUIRED COMPONENTS
   genmsg 
   actionlib_msgs
   OpenCV
-  #realsense2
 )
 
 ## System dependencies are found with CMake's conventions
@@ -220,7 +219,7 @@ include_directories(
 # catkin_add_nosetests(test)
 
 add_executable(camera_node src/camera_node.cpp)
-#add_dependencies(camera_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(camera_node ${${PROJECT_NAME}_EXPORTED_TARGETS})
 target_link_libraries(camera_node ${catkin_LIBRARIES} -lrealsense2 -lzbar)
 
 add_executable(picking_node src/picking_node.cpp)

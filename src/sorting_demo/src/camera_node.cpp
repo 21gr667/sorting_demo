@@ -4,7 +4,7 @@
 #include <zbar.h>
 #include <iostream>
 #include <geometry_msgs/Point.h>
-#include <sorting_demo/object.h>
+#include "sorting_demo/object.h"
 
 #define CONVEYOR_SPEED 25.15;
 
@@ -528,7 +528,7 @@ int main(int argc, char **argv) {
     ros::init(argc, argv, "camera_node");
     ros::NodeHandle node_handle;
 
-    wastePublisher = node_handle<sorting_demo::object>("objects", 1);
+    wastePublisher = node_handle.advertise<sorting_demo::object>("objects", 1);
 
     // Queue with waste objects:
     std::vector<waste> wasteObjects;
@@ -576,8 +576,6 @@ int main(int argc, char **argv) {
             // Cropping the homography image:
             cv::Mat objectImage = homographyImage(cv::Rect(85, 0, 265, 150)).clone();
             cv::imshow("Crop", objectImage);
-            
-            //cvtColor(objectImage, objectImage, cv::COLOR_BGR2HSV);
 
             // Images for thresholding:
             cv::Mat detectRed = objectImage.clone();
@@ -588,21 +586,6 @@ int main(int argc, char **argv) {
             cv::inRange(detectRed, cv::Scalar(0, 0, 80), cv::Scalar(80, 60, 150), detectRed); // R�d
             cv::inRange(detectBlue, cv::Scalar(65, 25, 0), cv::Scalar(125, 85, 40), detectBlue); //Bl�
             cv::inRange(detectYellow, cv::Scalar(0, 80, 100), cv::Scalar(110, 180, 180), detectYellow); //Gr�n
-
-            /* HSV
-            // Images for thresholding:
-            cv::Mat detectRed1 = objectImage.clone();
-            cv::Mat detectRed2 = objectImage.clone();
-            cv::Mat detectBlue = objectImage.clone();
-            cv::Mat detectYellow = objectImage.clone();
-
-            //Thresholding colors:
-            cv::inRange(detectRed1, cv::Scalar(0, 200, 70), cv::Scalar(40, 250, 110), detectRed1); // R�d
-            cv::inRange(detectRed2, cv::Scalar(200, 200, 70), cv::Scalar(255, 250, 110), detectRed2); // R�d
-            cv::Mat1b detectRed = detectRed1 | detectRed2;
-            cv::inRange(detectBlue, cv::Scalar(130, 200, 50), cv::Scalar(170, 255, 115), detectBlue); //Bl�
-            cv::inRange(detectYellow, cv::Scalar(20, 150, 100), cv::Scalar(80, 255, 150), detectYellow); //Gr�n
-            */
 
             // Morphology:
             morphology(detectRed, elem);
@@ -628,8 +611,6 @@ int main(int argc, char **argv) {
             // Remove objects if they overla
             removeOverlapMasks(wasteObjects);
 
-            // Debuggning only!!!! slows performance a lot:
-            
             cv::Mat wasteObjectMasks = plotWasteObjects(wasteObjects);
             cv::imshow("TEST", wasteObjectMasks);
 
