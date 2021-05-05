@@ -3,10 +3,14 @@
 #include <opencv2/opencv.hpp>
 #include <zbar.h>
 #include <iostream>
+#include <geometry_msgs/Point.h>
+#include <sorting_demo/object.h>
 
 #define CONVEYOR_SPEED 25.15;
 
 int wasteCounter = 0;
+
+ros::Publisher wastePublisher;
 
 // Struct to store a set of frames from realsense
 struct Frame {
@@ -455,6 +459,17 @@ void removePassedObjects(std::vector<waste> &wasteObjects) {
 
             std::cout << "Calculated X: " << x << ", Y: " << y << ", time: " << elapsedTime <<std::endl;
 
+            // Sending the object:
+            sorting_demo::object msg;
+            geometry_msgs::Point point;
+            point.x = x;
+            point.y = y;
+            point.z = 0;
+            msg.point = point;
+            msg.stamp = ros::Time::now();
+            msg.type = wasteObjects[i].type;
+            wastePublisher.publish(msg);
+
             // Remove the mask:
             wasteObjects.erase(wasteObjects.begin() + i);
 
@@ -512,6 +527,8 @@ int main(int argc, char **argv) {
     // Creating a node called camera_node:
     ros::init(argc, argv, "camera_node");
     ros::NodeHandle node_handle;
+
+    wastePublisher = node_handle<sorting_demo::object>("objects", 1);
 
     // Queue with waste objects:
     std::vector<waste> wasteObjects;
