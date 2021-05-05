@@ -1,0 +1,15 @@
+<launch>
+
+	<include file="$(find ur_robot_driver)/launch/ur5_bringup.launch">
+		<arg name="robot_ip" value="192.168.1.10"/>
+		<arg name="kinematics_config" value="$(find lego_throw)/config/ur5_calibration.yaml"/>
+		<arg name="controller_config_file" default="$(find ur_robot_driver)/config/ur5_controllers.yaml" doc="Config file used for defining the ROS-Control controllers."/>
+	</include>
+
+	<include file="$(find lego_throw)/launch/ur5_moveit_planning_execution.launch"/>
+
+	<include file="$(find lego_throw)/launch/moveit_rviz.launch">
+		<arg name="config" default="true" />
+	</include>
+
+</launch>
