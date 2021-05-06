@@ -24,7 +24,7 @@ const std::string PLANNING_GROUP = "manipulator";
 int serial_port = 0;
 bool isDonePicking = true;
 double conveyorSpeed = 1000/25.15;
-std::vector<double> orientation = {-0.647821, -0.308727, 0.288902, 0.633681};
+moveit::planning_interface::MoveGroupInterface *move_group;
 
 double deg2rad(double degree) {
     double pi = 3.14159265359;
@@ -63,122 +63,60 @@ void set_gripper_state(bool open) {
 }
 
 void go_to_joint_position(std::vector<double> joint_goal) {
-    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     moveit::planning_interface::MoveGroupInterface::Plan plan;
-    move_group.setMaxAccelerationScalingFactor(1.0);
-    move_group.setJointValueTarget(joint_goal);
-    move_group.setNumPlanningAttempts(10);
-    move_group.plan(plan);
-    move_group.execute(plan);
+    move_group->setMaxAccelerationScalingFactor(1.0);
+    move_group->setJointValueTarget(joint_goal);
+    move_group->setNumPlanningAttempts(10);
+    move_group->plan(plan);
+    move_group->execute(plan);
 }
 
 void go_to_position(std::vector<double> goal) {
-
-    /*
-    ROS_INFO("aaaa");
-
-    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
-
-    geometry_msgs::Pose target_pose1;
-    target_pose1.orientation.w = 1.0;
-    target_pose1.position.x = -0.28;
-    target_pose1.position.y = -0.01;
-    target_pose1.position.z = 0.5;
-    move_group.setPoseTarget(target_pose1);
-    ROS_INFO("bbbb");
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-    ROS_INFO("cccc");
-    move_group.plan(my_plan);
-    ROS_INFO("dddd");
-    move_group.move();
-    ROS_INFO("eeee");
-    */
-   
     ROS_INFO("x: %f", goal[0]);
     ROS_INFO("y: %f", goal[1]);
     ROS_INFO("z: %f", goal[2]);
 
-/*
-    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
-    geometry_msgs::Pose target_pose1;
-    target_pose1.orientation.x = -0.647821;
-    target_pose1.orientation.y = -0.308727;
-    target_pose1.orientation.z = 0.288902;
-    target_pose1.orientation.w = 0.633681;
-    target_pose1.position.x = goal[0];
-    target_pose1.position.y = goal[1];
-    target_pose1.position.z = goal[2];
-    move_group.setPoseTarget(target_pose1);
-
-    moveit::planning_interface::MoveGroupInterface::Plan my_plan;
-
-    bool success = (move_group.plan(my_plan) == moveit::planning_interface::MoveItErrorCode::SUCCESS);
-
-    move_group.move();
-*/
-
-
-    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
     moveit::planning_interface::MoveGroupInterface::Plan plan;
-    move_group.setMaxAccelerationScalingFactor(1.0);
 
-    move_group.setPositionTarget(goal[0], goal[1], goal[2]);
-    //move_group.setOrientationTarget(-0.647821, -0.308727, 0.288902, 0.633681);
-    move_group.setRPYTarget(goal[3], goal[4], goal[5]);
+    move_group->setMaxAccelerationScalingFactor(1.0);
 
-/*
     geometry_msgs::Pose target_pose;
-    target_pose.orientation.x = -0.647821;
-    target_pose.orientation.y = -0.308727;
-    target_pose.orientation.z = 0.288902;
-    target_pose.orientation.w = 0.633681;
+
+    target_pose.orientation.x = -0.497239;
+    target_pose.orientation.y = 0.494919;
+    target_pose.orientation.z = 0.503958;
+    target_pose.orientation.w = 0.503821;
     target_pose.position.x = goal[0];
     target_pose.position.y = goal[1];
     target_pose.position.z = goal[2];
-    move_group.setPoseTarget(target_pose);
-    */
 
-    move_group.setNumPlanningAttempts(10);
-    move_group.plan(plan);
-    move_group.execute(plan);
-
+    move_group->setPoseTarget(target_pose);
+    move_group->setNumPlanningAttempts(10);
+    move_group->plan(plan);
+    move_group->execute(plan);
 }
 
 std::vector<double> computePickPosition(Object object) {
-    /*
-    double x = 0.08 + object.y;
-    double y = 0.01;
-    double z = - 0.395 + object.z + 0.1;
-    */
-
-
-    double x = object.x;
-    double y = object.y;
-    double z = object.z;
+    double x = -0.08 - object.x;
+    double y = 0.3;
+    double z = 0.3;
     return {x, y, z};
 }
 
-void goToPickPosition(std::vector<double> position) {
-    position.push_back(2.5);
-    position.push_back(-1.93);
-    position.push_back(0.0);
-    go_to_position(position);
-}
-
 void waitForObject(Object object) {
+    /*
     double travelTime = conveyorSpeed/(760 - object.x);
 
     ros::Duration timeSpend = ros::Time::now() - object.stamp;
     ros::Duration timeLeft = ros::Duration(travelTime) - timeSpend;
     timeLeft.sleep();
+    */
+   ros::Duration(5.0).sleep();
 }
 
 void pick(std::vector<double> position) {
     std::vector<double> downPick = position;
-    downPick.push_back(1.141592);
-    downPick.push_back(0.0);
-    downPick.push_back(0.0);
-    downPick[2] = downPick[2] - 0.02;
+    downPick[2] = downPick[2] - 0.03;
     std::vector<double> upPick = position;
 
     go_to_position(downPick);
@@ -190,7 +128,7 @@ void goToBucket(string objectType) {
 }
 
 void goToDefaultPosition() {
-
+    go_to_joint_position({deg2rad(-23), deg2rad(-90), deg2rad(-97), deg2rad(-82), deg2rad(87), deg2rad(0)});
 }
 
 void tryPickNext() {
@@ -206,12 +144,12 @@ void tryPickNext() {
         ROS_INFO("found: %s", pickObject.type.c_str());
 
         std::vector<double> pickPosition = computePickPosition(pickObject);
-        goToPickPosition(pickPosition);
-        //set_gripper_state(true);
-        //waitForObject(pickObject);
-        //pick(pickPosition);
+        go_to_position(pickPosition);
+        set_gripper_state(true);
+        waitForObject(pickObject);
+        pick(pickPosition);
         //goToBucket(pickObject.type.c_str());
-        //set_gripper_state(false);
+        set_gripper_state(false);
         //goToDefaultPosition();
 
         isDonePicking = true;
@@ -263,10 +201,6 @@ void configure_serial_port() {
     ros::Duration(3.0).sleep();
 }
 
-
-
-
-
 void printPose() {
     moveit::planning_interface::MoveGroupInterface group("manipulator");
 
@@ -292,61 +226,27 @@ int main(int argc, char **argv) {
     ros::AsyncSpinner spinner(4);
     ros::NodeHandle nodeHandle;
 
+    moveit::planning_interface::MoveGroupInterface group(PLANNING_GROUP);
+    move_group = &group;
+
     ros::Subscriber subscriber = nodeHandle.subscribe("objects", 1000, objectCallback);
 
     spinner.start();
 
     configure_serial_port();
 
-    //go_to_joint_position({deg2rad(176), deg2rad(-95), deg2rad(104), deg2rad(-97), deg2rad(-90), deg2rad(-54)});
+    goToDefaultPosition();
 
-
-
-
-
-    moveit::planning_interface::MoveGroupInterface move_group(PLANNING_GROUP);
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    move_group.setMaxAccelerationScalingFactor(1.0);
-
-    geometry_msgs::Pose target_pose;
-    target_pose.orientation.x = -0.647821;
-    target_pose.orientation.y = -0.308727;
-    target_pose.orientation.z = 0.288902;
-    target_pose.orientation.w = 0.633681;
-    target_pose.position.x = -0.441450;
-    target_pose.position.y = -0.080358;
-    target_pose.position.z = 0.146406;
-    move_group.setPoseTarget(target_pose);
-
-    move_group.setNumPlanningAttempts(10);
-    move_group.plan(plan);
-    move_group.execute(plan);
-
-
-
-
-
-/*
     ros::Rate loop_rate(10);
     while (ros::ok()) {
-        //ros::spinOnce();
         tryPickNext();
-        //ROS_INFO("wuhu");
         printPose();
         loop_rate.sleep();
     }
-    */
-
+    
     ros::waitForShutdown();
 
     close(serial_port);
 
     return 0;
 }
-
-//Get data into array
-//loop through array
-    //suck
-    //pick up
-    //go to bucket
-    //stop suck
