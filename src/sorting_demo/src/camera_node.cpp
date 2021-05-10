@@ -536,7 +536,7 @@ int main(int argc, char **argv) {
     // Structuring element for morphology:
     cv::Mat elem = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(15, 15));
 
-    ros::Rate loop_rate(3);
+    ros::Rate loop_rate(2);
 
     printf("Start filming the scene\n");
 
@@ -571,7 +571,7 @@ int main(int argc, char **argv) {
         
             cv::Mat homographyImage;
             cv::warpPerspective(frame.matImage, homographyImage, hMatrix, cv::Size(462, 400));
-            //cv::imshow("Homography image", homographyImage);
+            cv::imshow("Homography image", homographyImage);
         
             // Cropping the homography image:
             cv::Mat objectImage = homographyImage(cv::Rect(85, 0, 265, 150)).clone();
@@ -618,6 +618,21 @@ int main(int argc, char **argv) {
             /*if (wasteObjects.size() > 0){
                 std::cout << "SIZE: " << wasteObjects.size() << std::endl;
             }*/
+        }
+
+        else {
+
+            // We update our masks:
+            updateMasks(wasteObjects);
+
+            // Remove passed masks:
+            removePassedObjects(wasteObjects);
+
+            // Remove objects if they overla
+            removeOverlapMasks(wasteObjects);
+
+            cv::Mat wasteObjectMasks = plotWasteObjects(wasteObjects);
+            cv::imshow("TEST", wasteObjectMasks);
         }
     
         if (cv::waitKey(25) == 27) break;  // If ESC is pushed then break loop
