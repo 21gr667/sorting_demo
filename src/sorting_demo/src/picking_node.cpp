@@ -23,13 +23,19 @@ using namespace std;
 const std::string PLANNING_GROUP = "manipulator";
 int serial_port = 0;
 bool isDonePicking = true;
-double conveyorSpeed = 1000/25.15;
+double conveyorSpeed = 1/25.15;
 moveit::planning_interface::MoveGroupInterface *move_group;
+double pickYPosition = 0.3;
 
 double deg2rad(double degree) {
     double pi = 3.14159265359;
     return (degree * (pi / 180));
 }
+
+std::vector<double> defaultJointGoal = {deg2rad(-23), deg2rad(-90), deg2rad(-97), deg2rad(-82), deg2rad(87), deg2rad(0)};
+std::vector<double> redJointGoal = {deg2rad(-25.0), deg2rad(-131.0), deg2rad(-38), deg2rad(-75), deg2rad(89), deg2rad(61)};
+std::vector<double> yellowJointGoal = {deg2rad(-7.0), deg2rad(-131.0), deg2rad(-28), deg2rad(-77), deg2rad(87), deg2rad(61)};
+std::vector<double> blueJointGoal = {deg2rad(12.0), deg2rad(-115.0), deg2rad(-56), deg2rad(-93), deg2rad(89), deg2rad(61)};
 
 class Object {
     public:
@@ -44,9 +50,9 @@ queue<Object> objects;
 
 void objectCallback(const sorting_demo::object::ConstPtr& msg) {
     Object newObject;
-    newObject.x = msg->point.x;
-    newObject.y = msg->point.y;
-    newObject.z = msg->point.z;
+    newObject.x = msg->point.x / 1000;
+    newObject.y = msg->point.y / 1000;
+    newObject.z = msg->point.z / 1000;
     newObject.stamp = msg->stamp;
     newObject.type = msg->type.c_str();
     objects.push(newObject);
@@ -55,10 +61,10 @@ void objectCallback(const sorting_demo::object::ConstPtr& msg) {
 void set_gripper_state(bool open) {
     if (open) {
         write(serial_port, "1", 2);
-        ROS_INFO("Gripper opened\n");
+        ROS_INFO("Gripper opened");
     } else {
         write(serial_port, "0", 2);
-        ROS_INFO("Gripper closed\n");
+        ROS_INFO("Gripper closed");
     }
 }
 
@@ -72,10 +78,6 @@ void go_to_joint_position(std::vector<double> joint_goal) {
 }
 
 void go_to_position(std::vector<double> goal) {
-    ROS_INFO("x: %f", goal[0]);
-    ROS_INFO("y: %f", goal[1]);
-    ROS_INFO("z: %f", goal[2]);
-
     moveit::planning_interface::MoveGroupInterface::Plan plan;
 
     move_group->setMaxAccelerationScalingFactor(1.0);
@@ -97,26 +99,45 @@ void go_to_position(std::vector<double> goal) {
 }
 
 std::vector<double> computePickPosition(Object object) {
-    double x = -0.08 - object.x;
-    double y = 0.3;
-    double z = 0.3;
+    double x = -0.11 - object.x;
+    double y = pickYPosition;
+    double z = 0.265;
     return {x, y, z};
 }
 
 void waitForObject(Object object) {
-    /*
-    double travelTime = conveyorSpeed/(760 - object.x);
+    double travelTime = (0.780 - pickYPosition - object.y)/conveyorSpeed;
+
+    ROS_INFO("travel time: %f", travelTime);
 
     ros::Duration timeSpend = ros::Time::now() - object.stamp;
+
+    ros::Duration timeLeft = ros::Duration(travelTime) - timeSpend + ros::Duration(0.8);
+
+    ROS_INFO("witing for %f seconds", timeLeft.toSec());
+
+    if (timeLeft.toSec() > 0.0) {
+        timeLeft.sleep();
+    }
+    
+   //ros::Duration(5.0).sleep();
+}
+
+bool canPickObject(Object object) {
+    double travelTime = (0.780 - pickYPosition - object.y)/conveyorSpeed;
+    ros::Duration timeSpend = ros::Time::now() - object.stamp;
     ros::Duration timeLeft = ros::Duration(travelTime) - timeSpend;
-    timeLeft.sleep();
-    */
-   ros::Duration(5.0).sleep();
+    if (timeLeft.toSec() > 0.1 && object.x > 0.15) {
+        return true;
+    } else {
+        ROS_INFO("%s object skiped\n", object.type.c_str());
+        return false;
+    }
 }
 
 void pick(std::vector<double> position) {
     std::vector<double> downPick = position;
-    downPick[2] = downPick[2] - 0.03;
+    downPick[2] = downPick[2] - 0.035;
     std::vector<double> upPick = position;
 
     go_to_position(downPick);
@@ -124,11 +145,15 @@ void pick(std::vector<double> position) {
 }
 
 void goToBucket(string objectType) {
-
-}
-
-void goToDefaultPosition() {
-    go_to_joint_position({deg2rad(-23), deg2rad(-90), deg2rad(-97), deg2rad(-82), deg2rad(87), deg2rad(0)});
+    if (objectType == "red") {
+        go_to_joint_position(redJointGoal);
+    }
+    if (objectType == "yellow") {
+        go_to_joint_position(yellowJointGoal);
+    }
+    if (objectType == "blue") {
+        go_to_joint_position(blueJointGoal);
+    }
 }
 
 void tryPickNext() {
@@ -137,20 +162,25 @@ void tryPickNext() {
         Object pickObject = objects.front();
         objects.pop();
 
-        ROS_INFO("X: %f", pickObject.x);
-        ROS_INFO("found: %f", pickObject.y);
-        ROS_INFO("found: %f", pickObject.z);
-        ROS_INFO("found: %f", pickObject.stamp.toSec());
-        ROS_INFO("found: %s", pickObject.type.c_str());
+        ROS_INFO("Picking %s object", pickObject.type.c_str());
 
         std::vector<double> pickPosition = computePickPosition(pickObject);
-        go_to_position(pickPosition);
-        set_gripper_state(true);
-        waitForObject(pickObject);
-        pick(pickPosition);
-        //goToBucket(pickObject.type.c_str());
-        set_gripper_state(false);
-        //goToDefaultPosition();
+
+        ROS_INFO("x: %f", pickPosition[0]);
+        ROS_INFO("y: %f", pickPosition[1]);
+        ROS_INFO("z: %f", pickPosition[2]);
+
+        if (canPickObject(pickObject)) {
+            go_to_position(pickPosition);
+            waitForObject(pickObject);
+            set_gripper_state(true);
+            pick(pickPosition);
+            goToBucket(pickObject.type.c_str());
+            set_gripper_state(false);
+            go_to_joint_position(defaultJointGoal);
+
+            ROS_INFO("DONE!\n");
+        }
 
         isDonePicking = true;
     }
@@ -235,12 +265,12 @@ int main(int argc, char **argv) {
 
     configure_serial_port();
 
-    goToDefaultPosition();
+    go_to_joint_position(defaultJointGoal);
 
     ros::Rate loop_rate(10);
     while (ros::ok()) {
         tryPickNext();
-        printPose();
+        //printPose();
         loop_rate.sleep();
     }
     
